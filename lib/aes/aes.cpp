@@ -1,7 +1,10 @@
 #include "aes.h"
 #include <mbedtls/aes.h>
-#include <string.h>
 #include <errno.h>
+
+#ifndef MBEDTLS_AES_C
+  #error "not implemented"
+#endif
 
 static inline int aes_set_key(mbedtls_aes_context *ctx, const unsigned char *key)
 {
