@@ -2,6 +2,8 @@
 
 #define MAX_PATH_LEN 32
 #define ETHEREUM_SIG_PREFIX "\u0019Ethereum Signed Message:\n"
+#define ETH_DERIVATION_PATH "m/44'/60'/0'/"
+#define BTC_DERIVATION_PATH "m/84'/0'/0'/"
 
 Wallet::Wallet(const String mnemonic)
 {
@@ -22,9 +24,23 @@ String Wallet::root_private_key()
     return this->hd.xprv();
 }
 
+PublicKeyFingerprint Wallet::public_eth_key_fingerprint()
+{
+    HDPrivateKey account = this->hd.derive(ETH_DERIVATION_PATH);
+    PublicKeyFingerprint publicKeyFingerprint;
+    account.xpub().sec(publicKeyFingerprint.public_key, 33);
+    memcpy(publicKeyFingerprint.chain_code, account.xpub().chainCode, 32);
+    account.xpub().fingerprint(publicKeyFingerprint.fingerprint);
+    return publicKeyFingerprint;
+}
+
 HDPrivateKey Wallet::derive_btc(unsigned int index)
 {
-    return this->hd.derive("m/84'/0'/0'/0/" + String(index) + "/");
+    char *derive_path = new char[64];
+    snprintf(derive_path, 64, "%s%d/%d/", BTC_DERIVATION_PATH, 0, index);
+    HDPrivateKey account = this->hd.derive(derive_path);
+    delete[] derive_path;
+    return account;
 }
 
 String Wallet::get_btc_address_segwit(HDPrivateKey account)
@@ -34,7 +50,11 @@ String Wallet::get_btc_address_segwit(HDPrivateKey account)
 
 HDPrivateKey Wallet::derive_eth(unsigned int index)
 {
-    return this->hd.derive("m/44'/60'/0'/0/" + String(index) + "/");
+    char *derive_path = new char[64];
+    snprintf(derive_path, 64, "%s%d/%d/", ETH_DERIVATION_PATH, 0, index);
+    HDPrivateKey account = this->hd.derive(derive_path);
+    delete[] derive_path;
+    return account;
 }
 
 String Wallet::get_eth_address(HDPrivateKey account)

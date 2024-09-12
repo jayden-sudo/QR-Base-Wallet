@@ -11,6 +11,13 @@
 
 class HDPrivateKey; // Forward declaration
 
+struct PublicKeyFingerprint
+{
+  uint8_t public_key[33] = {0};
+  uint8_t chain_code[32] = {0};
+  uint8_t fingerprint[4] = {0};
+};
+
 class Wallet
 {
 private:
@@ -22,6 +29,7 @@ public:
   ~Wallet();
 
   String root_private_key();
+  PublicKeyFingerprint public_eth_key_fingerprint();
 
   HDPrivateKey derive_btc(unsigned int index);
   static String get_btc_address_segwit(HDPrivateKey account);

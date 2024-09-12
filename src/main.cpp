@@ -1,16 +1,10 @@
 #include <Arduino.h>
 #include "wallet.h"
-#include "aes/aes.h"
+#include "aes.h"
 #include <EEPROM.h>
 #include <utility/trezor/bip39.h>
-#include <Hash.h>
-
-#ifndef USE_KECCAK
-#error "USE_KECCAK is not defined"
-#endif
-#ifndef USE_ETHEREUM
-#error "USE_ETHEREUM is not defined"
-#endif
+#include "qrcode_protocol.h"
+#include "transaction_factory.h"
 
 #define MAX_INCORRECT_PIN_ATTEMPTS 3
 #define MIN_PIN_LENGTH 3
@@ -65,11 +59,26 @@ void setup()
   Serial.println("Setup completed");
 }
 
+bool once_after_unlock = false;
+
 void loop()
 {
   if (wallet != nullptr)
   {
-    // Add wallet operations here
+    if (once_after_unlock == false)
+    {
+      once_after_unlock = true;
+      Serial.print("ETH Address #0: ");
+      Serial.println(Wallet::get_eth_address(wallet->derive_eth(0)));
+      Serial.print("ETH Address #1: ");
+      Serial.println(Wallet::get_eth_address(wallet->derive_eth(1)));
+      Serial.print("ETH Address #2: ");
+      Serial.println(Wallet::get_eth_address(wallet->derive_eth(2)));
+
+      String qrCode = generate_metamask_crypto_hdkey(wallet);
+      Serial.println(qrCode);
+
+    }
   }
 }
 
@@ -131,25 +140,23 @@ String inputPin()
 
 void initializeWallet(WalletData &walletData)
 {
+  if (wallet != nullptr)
+  {
+    // can't initialize wallet twice
+    return;
+  }
   String mnemonic = inputMnemonic();
-  wallet = new Wallet(mnemonic);
-
-  String rootPrivateKey = wallet->root_private_key();
-  Serial.print("Root Private Key: ");
-  Serial.println(rootPrivateKey);
-
+  Wallet *_wallet = new Wallet(mnemonic);
+  String rootPrivateKey = _wallet->root_private_key();
   String pin = inputPin();
   AES_encrypt(reinterpret_cast<const unsigned char *>(pin.c_str()),
               reinterpret_cast<const unsigned char *>(rootPrivateKey.c_str()),
               PRIVATE_KEY_SIZE, walletData.privateKey);
-
-  walletData.initialized = true;
   EEPROM.put(0, walletData);
   EEPROM.commit();
-
-  Serial.println("Wallet initialized:");
-  Serial.print("ETH Address #0: ");
-  Serial.println(Wallet::get_eth_address(wallet->derive_eth(0)));
+  wallet = _wallet;
+  walletData.initialized = true;
+  Serial.println("Wallet initialized");
 }
 
 bool unlockWallet(WalletData &walletData)
@@ -172,9 +179,7 @@ bool unlockWallet(WalletData &walletData)
         EEPROM.commit();
       }
       wallet = new Wallet(rootPrivateKey);
-      Serial.println("Wallet initialized:");
-      Serial.print("ETH Address #0: ");
-      Serial.println(Wallet::get_eth_address(wallet->derive_eth(0)));
+      Serial.println("Wallet unlocked");
       return true;
     }
 
