@@ -77,7 +77,6 @@ void loop()
 
       String qrCode = generate_metamask_crypto_hdkey(wallet);
       Serial.println(qrCode);
-
     }
   }
 }

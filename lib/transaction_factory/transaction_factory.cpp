@@ -2,12 +2,6 @@
 #include <string.h>
 #include <stdio.h>
 
-#define TRANSACTION_TYPE_LEGACY 0
-#define TRANSACTION_TYPE_ACCESS_LIST_EIP2930 1
-#define TRANSACTION_TYPE_FEE_MARKET_EIP1559 2
-#define TRANSACTION_TYPE_BLOB_EIP4844 3
-#define TRANSACTION_TYPE_EOA_CODE_EIP7702 4
-
 #define BUFFER_TO_HEX(hex_name, byteArray, byteArrayLength)  \
     do                                                       \
     {                                                        \
@@ -32,6 +26,7 @@ TransactionFactory::TransactionFactory(int error)
 }
 
 TransactionFactory::TransactionFactory(
+    uint8_t transactionType,
     uint8_t *chainId,
     size_t chainIdLen,
     uint8_t *nonce,
@@ -47,9 +42,11 @@ TransactionFactory::TransactionFactory(
     uint8_t *value,
     size_t valueLen,
     uint8_t *data,
-    size_t dataLen)
+    size_t dataLen,
+    uint8_t *accessList,
+    size_t accessListLen)
 {
-
+    this->transactionType = transactionType;
     BUFFER_TO_BIGNUMBER(chainId, chainIdLen, &this->chainId);
     char nonceStr[10] = {0};
     BUFFER_TO_HEX(nonceStr, nonce, nonceLen);
@@ -66,7 +63,14 @@ TransactionFactory::TransactionFactory(
     BUFFER_TO_HEX(dataStr, data, dataLen);
     this->data = String("0x") + String(dataStr);
     delete[] dataStr;
+
+    // #TODO accessList
 }
+
+#define DATA_INPUT(index)                \
+    re.item.data.list.items[index].data, \
+        re.item.data.list.items[index].length
+
 TransactionFactory TransactionFactory::fromSerializedData(uint8_t *input, const size_t input_size)
 {
     if (input[0] <= 0x7f)
@@ -91,11 +95,9 @@ TransactionFactory TransactionFactory::fromSerializedData(uint8_t *input, const 
             {
                 return TransactionFactory(1);
             }
-#define DATA_INPUT(index)                \
-    re.item.data.list.items[index].data, \
-        re.item.data.list.items[index].length
 
             TransactionFactory _transactionFactory = TransactionFactory(
+                TRANSACTION_TYPE_FEE_MARKET_EIP1559,
                 DATA_INPUT(0),
                 DATA_INPUT(1),
                 DATA_INPUT(2),
@@ -103,7 +105,8 @@ TransactionFactory TransactionFactory::fromSerializedData(uint8_t *input, const 
                 DATA_INPUT(4),
                 DATA_INPUT(5),
                 DATA_INPUT(6),
-                DATA_INPUT(7));
+                DATA_INPUT(7),
+                DATA_INPUT(8));
             free_decode_result(&re);
             return _transactionFactory;
         }
@@ -160,3 +163,5 @@ String TransactionFactory::toString()
 
     return result;
 }
+
+TransactionFactory::~TransactionFactory() {}

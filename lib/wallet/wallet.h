@@ -37,6 +37,6 @@ public:
   HDPrivateKey derive_eth(unsigned int index);
   static String get_eth_address(HDPrivateKey account);
   static String eth_sign(HDPrivateKey account, const uint8_t hash[32]);
-
+  static String eth_sign_serialized_data(HDPrivateKey account, const uint8_t *data, size_t dataLen);
   static int keccak_256_eip191(String data, unsigned char *digest);
 };
