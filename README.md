@@ -8,6 +8,12 @@ The goal of this project is to provide a low-cost, easy-to-build hardware wallet
 
 
 
+Here is a video introducing how QR-Base Wallet interacts with MetaMask ( from AirGap Wallet).
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/ATfjCmIVrGg?si=DJ8IN-H_wPbMp-An" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+
+
 ## Hardware Supported
 
 The current development is based on the [**ESP32-S3 MCU**](https://www.espressif.com/en/products/socs/esp32-s3), which has enough processing power to handle real-time QR code scanning, making it ideal for a QR-based wallet client.
