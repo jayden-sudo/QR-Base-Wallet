@@ -6,12 +6,7 @@
 **Welcome to the QR-Base Hardware Wallet Project!**  
 The goal of this project is to provide a low-cost, easy-to-build hardware wallet that uses QR codes for secure transactions. With price under $15, we aim to make secure digital asset management accessible to everyone.
 
-
-
-Here is a video introducing how QR-Base Wallet interacts with MetaMask ( from AirGap Wallet).
-
-<iframe width="560" height="315" src="https://www.youtube.com/embed/ATfjCmIVrGg?si=DJ8IN-H_wPbMp-An" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-
+[Here is a video introducing how QR-Base Wallet interacts with MetaMask from AirGap Wallet.](https://youtu.be/ATfjCmIVrGg)
 
 
 ## Hardware Supported
