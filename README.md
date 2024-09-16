@@ -35,6 +35,10 @@ The current development is based on the [**ESP32-S3 MCU**](https://www.espressif
 ### Software Progress:
 - [ ] **Custom Bootloader**
 
+- [ ] Multi qr-code input
+
+- [ ] Multi qr-code output
+
 - **Ethereum Support** (EVM chains)
   - MetaMask Wallet
     - [ ] Legacy Transactions
