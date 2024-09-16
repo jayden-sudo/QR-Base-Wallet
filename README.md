@@ -32,6 +32,8 @@ The current development is based on the [**ESP32-S3 MCU**](https://www.espressif
     
 
 ### Software Progress:
+- [ ] **Custom Bootloader**
+
 - **Ethereum Support** (EVM chains)
   - MetaMask Wallet
     - [ ] Legacy Transactions
@@ -40,7 +42,7 @@ The current development is based on the [**ESP32-S3 MCU**](https://www.espressif
     - [ ] Blob Transactions (EIP-4844)
   - [ ] AirGap Wallet
     - [ ] TBD
-  
+
 - **Bitcoin Support**
   - [ ] Bitcoin (SegWit)
     - [ ] AirGap Wallet
