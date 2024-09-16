@@ -2,45 +2,40 @@
 
 #include <stdlib.h>
 
-typedef struct
+#pragma once
+
+#include <string.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+
+#define RLP_ITEM_NULL 0
+#define RLP_ITEM_LIST 1
+#define RLP_ITEM_BYTES 2
+
+struct RLP_ITEM
 {
-    uint8_t *data;
-    size_t length;
-} ByteArray;
+    /*
+        RLP_ITEM_NULL, RLP_ITEM_LIST, RLP_ITEM_BYTES
+     */
+    uint8_t type;
+    /*
+        if item is `RLP_ITEM_LIST`, content is the pointer to the first item in the list
+        if item is `RLP_ITEM_BYTES`, content is the pointer to the content of the bytes
+     */
+    uint8_t *content;
+    /*
+        if item is `RLP_ITEM_LIST`, content_len is the length of all items in the list
+        if item is `RLP_ITEM_BYTES`, content_len is the length of the bytes
+     */
+    size_t content_len;
+    /*
+        if item is `RLP_ITEM_LIST`, content_offset is the offset of the first item in the list
+        if item is `RLP_ITEM_BYTES`, content_offset is the offset of the bytes
+     */
+    size_t content_offset;
+};
 
-typedef struct
-{
-    ByteArray *items;
-    size_t count;
-    size_t capacity;
-} List;
+void rlp_decode(uint8_t *input, size_t input_len, struct RLP_ITEM *item);
 
-typedef struct
-{
-    union
-    {
-        ByteArray bytes;
-        List list;
-    } data;
-    int is_list;
-} RLPItem;
-
-typedef struct
-{
-    RLPItem item;
-    uint8_t *remainder;
-    size_t remainder_length;
-    int error;
-} DecodeResult;
-
-DecodeResult rlp_decode(uint8_t *input, size_t input_length);
-void free_decode_result(DecodeResult *result);
-
-int append_signature(
-    char *transaction_serialized,
-    size_t transaction_serialized_len,
-    int yParity,
-    char r[32],
-    char s[32],
-    char *signature,
-    const size_t signature_len);
+int rlp_encode_array(uint8_t *buf, size_t buf_len, struct RLP_ITEM **item_array, size_t item_array_size);

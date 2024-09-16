@@ -5,6 +5,13 @@
 #include <utility/trezor/bip39.h>
 #include "qrcode_protocol.h"
 #include "transaction_factory.h"
+#include <base64url.h>
+#include <bc-ur.h>
+#include <qrcodegen.h>
+
+/*
+  /Users/<user>/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/qout_qspi/include/sdkconfig.h
+ */
 
 #define MAX_INCORRECT_PIN_ATTEMPTS 3
 #define MIN_PIN_LENGTH 3
@@ -28,11 +35,12 @@ void eraseWalletData(WalletData &walletData);
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
   while (!Serial)
   {
     ; // wait for serial port to open
   }
+
   Serial.println("Setup started");
 
   WalletData walletData;
@@ -60,6 +68,7 @@ void setup()
 }
 
 bool once_after_unlock = false;
+bool on_process = false;
 
 void loop()
 {
@@ -68,6 +77,7 @@ void loop()
     if (once_after_unlock == false)
     {
       once_after_unlock = true;
+
       Serial.print("ETH Address #0: ");
       Serial.println(Wallet::get_eth_address(wallet->derive_eth(0)));
       Serial.print("ETH Address #1: ");
@@ -75,8 +85,92 @@ void loop()
       Serial.print("ETH Address #2: ");
       Serial.println(Wallet::get_eth_address(wallet->derive_eth(2)));
 
+      Serial.println("Metamask Connect QR code:");
       String qrCode = generate_metamask_crypto_hdkey(wallet);
       Serial.println(qrCode);
+      Serial.println("=======================");
+    }
+    if (on_process == false)
+    {
+      on_process = true;
+      {
+        Serial.println("Input QR code:");
+        while (Serial.available() == 0)
+        {
+          ;
+        }
+        String qrcode_input = Serial.readString();
+        // qrcode_input = "UR:ETH-SIGN-REQUEST/OLADTPDAGDHEWFEMLOBSMNGSFXLYASWKPDDRMEGTQDAOHDIMAOYAIOLSPKENOSLALRHKISDLAELRRPAHCTBSLFLYESMWNEVOESHLIOINKSENQZNEGMFTGYFPOSYAZMTIATIMLAROFNBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAERTAXAAAACYAEPKENOSAHTAADDYOEADLECSDWYKCSFNYKAEYKAEWKAEWKAOCYWLDAQZPRAMGHNEVOESHLIOINKSENQZNEGMFTGYFPOSYAZMTIATIMCNMYJTRE";
+        // qrcode_input = "UR:ETH-SIGN-REQUEST/OLADTPDAGDBKAABWRDVOHHGEBBNEWKCAWLRPLERSKTAOHDECAOWFLSPKENOSLALRHKISDLAELPBNRODYEMDYLFGMAYMWMYIATSUTIMFHHKETHSJTWTHNCMRKWZHPTBAOEOBZLOADIAFEKSHLLEAEAELARTAXAAAACYAEPKENOSAHTAADDYOEADLECSDWYKCSFNYKAEYKAEWKAEWKAOCYWLDAQZPRAMGHNEVOESHLIOINKSENQZNEGMFTGYFPOSYAZMTIATIMFGVLDWFW";
+        qrcode_input.trim();
+        {
+          String _type;
+          String _payload;
+          if (decode_url(qrcode_input, &_type, &_payload) == 0)
+          {
+            if (_type == METAMASK_ETH_SIGN_REQUEST)
+            {
+              MetamaskEthSignRequest request;
+              decode_metamask_eth_sign_request(_payload, &request);
+
+              size_t sign_data_max_len = request.sign_data_base64url.length();
+              uint8_t *sign_data = new uint8_t[sign_data_max_len];
+              size_t sign_data_len = decode_base64url(request.sign_data_base64url, sign_data, sign_data_max_len);
+              String sign_data_hex = toHex(sign_data, sign_data_len);
+              Serial.println("sign_data_hex:");
+              Serial.println(sign_data_hex);
+              Serial.println(request.data_type);
+              Serial.println(request.chain_id);
+              Serial.println(request.derivation_path);
+              Serial.println(request.address);
+              Serial.println("Creating transaction factory...");
+              TransactionFactory *transaction = TransactionFactory::fromSerializedData(sign_data, sign_data_len);
+              do
+              {
+                if (transaction->error == 0)
+                {
+
+                  HDPrivateKey account = wallet->derive(request.derivation_path);
+                  if (Wallet::get_eth_address(account) != request.address)
+                  {
+                    Serial.println("Invalid address");
+                  }
+                  else
+                  {
+                    Serial.println("Signing transaction...");
+                    uint8_t signature[65];
+                    Wallet::eth_sign_serialized_data(account, sign_data, sign_data_len, signature);
+                    size_t uuid_max_len = request.uuid_base64url.length();
+                    uint8_t *uuid = new uint8_t[uuid_max_len];
+                    size_t uuid_len = decode_base64url(request.uuid_base64url, uuid, uuid_max_len);
+                    String qr_code = generate_metamask_eth_signature(uuid, uuid_len, signature);
+                    delete[] uuid;
+                    Serial.println("Signature QR code:");
+                    Serial.println(qr_code);
+                    Serial.println("QR code sent");
+                    Serial.println("=======================");
+                    Serial.println("");
+                    Serial.println("=======================");
+                  }
+                }
+              } while (0);
+              delete[] sign_data;
+              delete transaction;
+            }
+            else
+            {
+              Serial.print("Unsupported QR code type: ");
+              Serial.println(_type);
+            }
+          }
+          else
+          {
+
+            Serial.println("Invalid QR code");
+          }
+        }
+      }
+      on_process = false;
     }
   }
 }

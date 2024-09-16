@@ -36,6 +36,11 @@ PublicKeyFingerprint Wallet::public_eth_key_fingerprint()
     return publicKeyFingerprint;
 }
 
+HDPrivateKey Wallet::derive(String path)
+{
+    return this->hd.derive(path);
+}
+
 HDPrivateKey Wallet::derive_btc(unsigned int index)
 {
     char *derive_path = new char[64];
@@ -77,49 +82,15 @@ String Wallet::eth_sign(HDPrivateKey account, const uint8_t hash[32])
     sig.bin(signature, 65);
     return toHex(signature, 65);
 }
-
-String Wallet::eth_sign_serialized_data(HDPrivateKey account, const uint8_t *data, size_t dataLen)
+void Wallet::eth_sign_serialized_data(HDPrivateKey account, uint8_t *serialized_data, size_t serialized_data_len, uint8_t signature[65])
 {
-    uint8_t hash[32] = {0};
-    keccak_256(data, dataLen, hash);
-    // printHex(hash, 32);
-    Serial.println("eth_sign_serialized_data(hex):");
-    for (size_t i = 0; i < dataLen; i++)
-    {
-        char hex[3] = {0};
-        snprintf(hex, 3, "%02x", data[i]);
-        Serial.print(hex);
-    }
-    Serial.println();
-
-    Serial.println("eth_sign_serialized_data(hex)- hash :");
-    for (size_t i = 0; i < 32; i++)
-    {
-        char hex[3] = {0};
-        snprintf(hex, 3, "%02x", hash[i]);
-        Serial.print(hex);
-    }
-    Serial.println();
-
+    size_t transaction_serialized_len = 0;
+    unsigned char hash[32] = {0};
+    // keccak256
+    keccak_256(serialized_data, serialized_data_len, hash);
+    // sign
     Signature sig = account.sign(hash);
-    uint8_t signature[65] = {0};
-    sig.index += 27;
     sig.bin(signature, 65);
-
-    TransactionFactory _transaction = TransactionFactory::fromSerializedData((uint8_t *)data, sizeof(dataLen));
-    if (_transaction.error != 0)
-    {
-        return "";
-    }
-    if (_transaction.transactionType == TRANSACTION_TYPE_FEE_MARKET_EIP1559)
-    {
-       
-    }
-    else
-    {
-        // not implemented
-        return "";
-    }
 }
 
 int Wallet::keccak_256_eip191(String data, unsigned char *digest)

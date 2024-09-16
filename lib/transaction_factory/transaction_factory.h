@@ -16,6 +16,8 @@ class TransactionFactory
 private:
     TransactionFactory(int error);
     TransactionFactory(
+        uint8_t *rlp_encoded,
+        size_t rlp_encoded_len,
         uint8_t transactionType,
         uint8_t *chainId,
         size_t chainIdLen,
@@ -37,19 +39,37 @@ private:
         size_t accessListLen);
 
 public:
+    uint8_t *rlp_encoded = nullptr;
+    size_t rlp_encoded_len = 0;
+
     int error = 0;
 
     uint8_t transactionType;
-    bignum256 chainId;
-    uint32_t nonce;
-    bignum256 maxPriorityFeePerGas;
-    bignum256 maxFeePerGas;
-    bignum256 gasLimit;
-    String to;
-    bignum256 value;
-    String data;
-    std::vector<String> accessList;
-    static TransactionFactory fromSerializedData(uint8_t *input, size_t input_size);
+    uint8_t *chainId;
+    size_t chainIdLen;
+    uint8_t *nonce;
+    size_t nonceLen;
+    uint8_t *maxPriorityFeePerGas;
+    size_t maxPriorityFeePerGasLen;
+    uint8_t *maxFeePerGas;
+    size_t maxFeePerGasLen;
+    uint8_t *gasLimit;
+    size_t gasLimitLen;
+    uint8_t *to;
+    size_t toLen;
+    uint8_t *value;
+    size_t valueLen;
+    uint8_t *data;
+    size_t dataLen;
+    uint8_t *accessList;
+    size_t accessListLen;
+
+    static TransactionFactory *fromSerializedData(uint8_t *input, size_t input_size);
     ~TransactionFactory();
+
+    static uint64_t to_uint64_t(uint8_t *input, size_t input_size);
+    static bignum256 to_bignum256(uint8_t *input, size_t input_size);
+    static String to_hex_string(uint8_t *input, size_t input_size);
+
     String toString();
 };

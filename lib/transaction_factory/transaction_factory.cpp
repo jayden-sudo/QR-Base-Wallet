@@ -1,6 +1,7 @@
 #include "transaction_factory.h"
 #include <string.h>
 #include <stdio.h>
+#include <Conversion.h>
 
 #define BUFFER_TO_HEX(hex_name, byteArray, byteArrayLength)  \
     do                                                       \
@@ -22,10 +23,15 @@
 
 TransactionFactory::TransactionFactory(int error)
 {
+    Serial.print("TransactionFactory failed with error:");
+    Serial.println(String(error));
     this->error = error;
 }
 
 TransactionFactory::TransactionFactory(
+    uint8_t *rlp_encoded,
+    size_t rlp_encoded_len,
+
     uint8_t transactionType,
     uint8_t *chainId,
     size_t chainIdLen,
@@ -46,90 +52,236 @@ TransactionFactory::TransactionFactory(
     uint8_t *accessList,
     size_t accessListLen)
 {
-    this->transactionType = transactionType;
-    BUFFER_TO_BIGNUMBER(chainId, chainIdLen, &this->chainId);
-    char nonceStr[10] = {0};
-    BUFFER_TO_HEX(nonceStr, nonce, nonceLen);
-    this->nonce = strtol(nonceStr, NULL, 16);
-    BUFFER_TO_BIGNUMBER(maxPriorityFeePerGas, maxPriorityFeePerGasLen, &this->maxPriorityFeePerGas);
-    BUFFER_TO_BIGNUMBER(maxFeePerGas, maxFeePerGasLen, &this->maxFeePerGas);
-    BUFFER_TO_BIGNUMBER(gasLimit, gasLimitLen, &this->gasLimit);
-    char toStr[41] = {0};
-    BUFFER_TO_HEX(toStr, to, toLen);
-    this->to = String("0x") + String(toStr);
-    BUFFER_TO_BIGNUMBER(value, valueLen, &this->value);
-    char *dataStr = new char[dataLen * 2 + 1];
-    dataStr[dataLen * 2] = '\0';
-    BUFFER_TO_HEX(dataStr, data, dataLen);
-    this->data = String("0x") + String(dataStr);
-    delete[] dataStr;
+    this->rlp_encoded = new uint8_t[rlp_encoded_len];
+    memcpy(this->rlp_encoded, rlp_encoded, rlp_encoded_len);
+    this->rlp_encoded_len = rlp_encoded_len;
 
-    // #TODO accessList
+    this->transactionType = transactionType;
+    this->chainId = chainId;
+    this->chainIdLen = chainIdLen;
+    this->nonce = nonce;
+    this->nonceLen = nonceLen;
+    this->maxPriorityFeePerGas = maxPriorityFeePerGas;
+    this->maxPriorityFeePerGasLen = maxPriorityFeePerGasLen;
+    this->maxFeePerGas = maxFeePerGas;
+    this->maxFeePerGasLen = maxFeePerGasLen;
+    this->gasLimit = gasLimit;
+    this->gasLimitLen = gasLimitLen;
+    this->to = to;
+    this->toLen = toLen;
+    this->value = value;
+    this->valueLen = valueLen;
+    this->data = data;
+    this->dataLen = dataLen;
+    this->accessList = accessList;
+    this->accessListLen = accessListLen;
 }
 
-#define DATA_INPUT(index)                \
-    re.item.data.list.items[index].data, \
-        re.item.data.list.items[index].length
+#define TRANSACTION_ERROR(code)                                     \
+    TransactionFactory *transaction = new TransactionFactory(code); \
+    return transaction;
 
-TransactionFactory TransactionFactory::fromSerializedData(uint8_t *input, const size_t input_size)
+TransactionFactory *TransactionFactory::fromSerializedData(uint8_t *input, const size_t input_size)
 {
     if (input[0] <= 0x7f)
     {
-        // Determine the type.
+        // Ethereum Transaction Type
         switch (input[0])
         {
         case TRANSACTION_TYPE_ACCESS_LIST_EIP2930:
         {
-            return TransactionFactory(1);
+            // #TODO
+            // not implemented
+            TRANSACTION_ERROR(1);
         }
         case TRANSACTION_TYPE_FEE_MARKET_EIP1559:
         {
-            // remove the first byte
-            DecodeResult re = rlp_decode(input + 1, input_size - 1);
-            if (re.error != 0)
-            {
-                return TransactionFactory(1);
-            }
+            uint8_t *chainId;
+            size_t chainIdLen;
+            uint8_t *nonce;
+            size_t nonceLen;
+            uint8_t *maxPriorityFeePerGas;
+            size_t maxPriorityFeePerGasLen;
+            uint8_t *maxFeePerGas;
+            size_t maxFeePerGasLen;
+            uint8_t *gasLimit;
+            size_t gasLimitLen;
+            uint8_t *to;
+            size_t toLen;
+            uint8_t *value;
+            size_t valueLen;
+            uint8_t *data;
+            size_t dataLen;
+            uint8_t *accessList;
+            size_t accessListLen;
 
-            if (re.item.is_list != 1 || re.item.data.list.count != 9)
-            {
-                return TransactionFactory(1);
-            }
+            uint8_t *rlp_encoded_ptr = input;
+            size_t rlp_encoded_len = input_size;
 
-            TransactionFactory _transactionFactory = TransactionFactory(
+            rlp_encoded_ptr++;
+            rlp_encoded_len--;
+
+            struct RLP_ITEM item;
+
+            rlp_decode(rlp_encoded_ptr, rlp_encoded_len, &item);
+            if (item.type != RLP_ITEM_LIST)
+            {
+                TRANSACTION_ERROR(2);
+            }
+            rlp_encoded_len = item.content_len;
+            rlp_encoded_ptr = item.content;
+            // EIP1559 Transaction has 9 items
+            const size_t transaction_item_len = 9;
+            for (size_t i = 0; i < transaction_item_len; i++)
+            {
+                rlp_decode(rlp_encoded_ptr, rlp_encoded_len, &item);
+                switch (i)
+                {
+                case 0:
+                {
+                    chainId = item.content;
+                    chainIdLen = item.content_len;
+                    break;
+                }
+                case 1:
+                {
+                    nonce = item.content;
+                    nonceLen = item.content_len;
+                    break;
+                }
+                case 2:
+                {
+                    maxPriorityFeePerGas = item.content;
+                    maxPriorityFeePerGasLen = item.content_len;
+                    break;
+                }
+                case 3:
+                {
+                    maxFeePerGas = item.content;
+                    maxFeePerGasLen = item.content_len;
+                    break;
+                }
+                case 4:
+                {
+                    gasLimit = item.content;
+                    gasLimitLen = item.content_len;
+                    break;
+                }
+                case 5:
+                {
+                    to = item.content;
+                    toLen = item.content_len;
+                    break;
+                }
+                case 6:
+                {
+                    value = item.content;
+                    valueLen = item.content_len;
+                    break;
+                }
+                case 7:
+                {
+                    data = item.content;
+                    dataLen = item.content_len;
+                    break;
+                }
+                case 8:
+                {
+                    accessList = item.content;
+                    accessListLen = item.content_len;
+                    break;
+                }
+                }
+                if (item.type == RLP_ITEM_NULL)
+                {
+                    TRANSACTION_ERROR(3);
+                }
+                else if (item.type == RLP_ITEM_BYTES)
+                {
+                    size_t skip_len = item.content_offset + item.content_len;
+                    rlp_encoded_ptr += skip_len;
+                    rlp_encoded_len -= skip_len;
+                }
+                else if (item.type == RLP_ITEM_LIST)
+                {
+                    size_t skip_len = item.content_offset + item.content_len;
+                    rlp_encoded_ptr += skip_len;
+                    rlp_encoded_len -= skip_len;
+                }
+                else
+                {
+                    TRANSACTION_ERROR(4);
+                }
+            }
+            TransactionFactory *transactionFactory = new TransactionFactory(
+                input,
+                input_size,
                 TRANSACTION_TYPE_FEE_MARKET_EIP1559,
-                DATA_INPUT(0),
-                DATA_INPUT(1),
-                DATA_INPUT(2),
-                DATA_INPUT(3),
-                DATA_INPUT(4),
-                DATA_INPUT(5),
-                DATA_INPUT(6),
-                DATA_INPUT(7),
-                DATA_INPUT(8));
-            free_decode_result(&re);
-            return _transactionFactory;
+                chainId,
+                chainIdLen,
+                nonce,
+                nonceLen,
+                maxPriorityFeePerGas,
+                maxPriorityFeePerGasLen,
+                maxFeePerGas,
+                maxFeePerGasLen,
+                gasLimit,
+                gasLimitLen,
+                to,
+                toLen,
+                value,
+                valueLen,
+                data,
+                dataLen,
+                accessList,
+                accessListLen);
+            return transactionFactory;
         }
         case TRANSACTION_TYPE_BLOB_EIP4844:
         {
-            return TransactionFactory(1);
+            // #TODO
+            // not implemented
+            TRANSACTION_ERROR(1);
         }
 
         case TRANSACTION_TYPE_EOA_CODE_EIP7702:
         {
-            return TransactionFactory(1);
+            // #TODO
+            // not implemented
+            TRANSACTION_ERROR(1);
         }
         default:
         {
-            return TransactionFactory(1);
+            // #TODO
+            // not implemented
+            TRANSACTION_ERROR(1);
         }
         }
     }
     else
     {
         // TransactionType_Legacy
-        return TransactionFactory(1);
+        // #TODO
+        // not implemented
+        TRANSACTION_ERROR(1);
     }
+}
+
+uint64_t TransactionFactory::to_uint64_t(uint8_t *input, size_t input_size)
+{
+    bignum256 _data = TransactionFactory::to_bignum256(input, input_size);
+    return bn_write_uint64(&_data);
+}
+bignum256 TransactionFactory::to_bignum256(uint8_t *input, size_t input_size)
+{
+    bignum256 _data;
+    BUFFER_TO_BIGNUMBER(input, input_size, &_data);
+    return _data;
+}
+String TransactionFactory::to_hex_string(uint8_t *input, size_t input_size)
+{
+    String _data = toHex(input, input_size);
+    return _data;
 }
 
 String TransactionFactory::toString()
@@ -140,28 +292,53 @@ String TransactionFactory::toString()
     char temp[64];
     size_t tempLen;
 
-    tempLen = bn_format(&this->chainId, "", "", 0, 0, false, temp, sizeof(temp));
-    result += "chainId: " + String(temp) + "\n";
+    result += "chainId: " + String(TransactionFactory::to_uint64_t(this->chainId, this->chainIdLen)) + "\n";
 
-    result += "nonce: " + String(this->nonce) + "\n";
+    result += "nonce: " + String(TransactionFactory::to_uint64_t(this->nonce, this->nonceLen)) + "\n";
 
-    tempLen = bn_format(&this->maxPriorityFeePerGas, "", "", 0, 0, false, temp, sizeof(temp));
+    bignum256 maxPriorityFee = TransactionFactory::to_bignum256(
+        this->maxPriorityFeePerGas,
+        this->maxPriorityFeePerGasLen);
+    tempLen = bn_format(
+        &maxPriorityFee,
+        "", "", 0, 0, false, temp, sizeof(temp));
     result += "maxPriorityFeePerGas: " + String(temp) + "\n";
 
-    tempLen = bn_format(&this->maxFeePerGas, "", "", 0, 0, false, temp, sizeof(temp));
+    bignum256 maxFee = TransactionFactory::to_bignum256(
+        this->maxFeePerGas,
+        this->maxFeePerGasLen);
+    tempLen = bn_format(
+        &maxFee,
+        "", "", 0, 0, false, temp, sizeof(temp));
     result += "maxFeePerGas: " + String(temp) + "\n";
 
-    tempLen = bn_format(&this->gasLimit, "", "", 0, 0, false, temp, sizeof(temp));
+    bignum256 gasLimit = TransactionFactory::to_bignum256(
+        this->gasLimit,
+        this->gasLimitLen);
+    tempLen = bn_format(
+        &gasLimit,
+        "", "", 0, 0, false, temp, sizeof(temp));
     result += "gasLimit: " + String(temp) + "\n";
 
-    result += "to: " + this->to + "\n";
+    result += "to: 0x" + TransactionFactory::to_hex_string(this->to, this->toLen) + "\n";
 
-    tempLen = bn_format(&this->value, "", "", 0, 0, false, temp, sizeof(temp));
+    bignum256 value = TransactionFactory::to_bignum256(
+        this->value,
+        this->valueLen);
+    tempLen = bn_format(
+        &value,
+        "", "", 0, 0, false, temp, sizeof(temp));
     result += "value: " + String(temp) + "\n";
 
-    result += "data: " + this->data + "\n";
+    result += "data: 0x" + TransactionFactory::to_hex_string(this->data, this->dataLen) + "\n";
 
     return result;
 }
 
-TransactionFactory::~TransactionFactory() {}
+TransactionFactory::~TransactionFactory()
+{
+    if (this->rlp_encoded != nullptr)
+    {
+        delete[] this->rlp_encoded;
+    }
+}
