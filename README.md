@@ -54,8 +54,8 @@ The current development is based on the [**ESP32-S3 MCU**](https://www.espressif
 ## How to Build
 The project is developed using the PlatformIO IDE based on the Arduino framework. Compiling the software is incredibly simple:
 
-1. Install the PlatformIO IDE.
-2. Open the project in PlatformIO.
+1. Install the [PlatformIO IDE](https://platformio.org/platformio-ide).
+2. Open the project in PlatformIO IDE.
 3. Click the 'PlatformIO: Build' button to compile the project.
 
 
