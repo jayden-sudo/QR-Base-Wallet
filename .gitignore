@@ -1,4 +1,7 @@
 
 .DS_Store
 /.vscode
-/.pio
+/build
+/managed_components
+sdkconfig.old
+sdkconfig

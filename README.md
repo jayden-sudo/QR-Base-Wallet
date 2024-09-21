@@ -1,13 +1,12 @@
 
 # QR-Base Hardware Wallet
 
-### Build a truly usable Hardware Wallet(not a toy) for Under $15!
+### Build a truly usable Hardware Wallet for Under $20
 
 **Welcome to the QR-Base Hardware Wallet Project!**  
-The goal of this project is to provide a low-cost, easy-to-build hardware wallet that uses QR codes for secure transactions. With price under $15, we aim to make secure digital asset management accessible to everyone.
+The goal of this project is to provide a low-cost, easy-to-build hardware wallet that uses QR codes for secure transactions. With price under $20, we aim to make secure digital asset management accessible to everyone.
 
-[Here is a video introducing how QR-Base Wallet interacts with MetaMask from AirGap Wallet.](https://youtu.be/ATfjCmIVrGg)
-
+[Here is a video introducing how QR-Base Wallet interacts with MetaMask from AirGap Wallet.](https://www.youtube.com/watch?v=HIKJh0h7QiU&t=55s)
 
 ## Hardware Supported
 
@@ -15,24 +14,35 @@ The current development is based on the [**ESP32-S3 MCU**](https://www.espressif
 
 
 
+- MCU
+
+  | MCU      | Support | Test |
+  | -------- | ------- | ---- |
+  | ESP32-S3 | ✅       | ✅    |
+  | ESP32-S2 | ✅       |      |
+
+  
+
+- Camera
+
+  | Camera | Support | Test |
+  | ------ | ------- | ---- |
+  | OV2640 | ✅       | ✅    |
+  | OV3660 | ✅       |      |
+  | GC0308 |         |      |
+
+  
+
+- Screen
+
+  | Screen | Support | Test |
+  | ------ | ------- | ---- |
+  | TBD    |         |      |
+
+  
+
 ## Project Progress
 
-### Hardware Progress:
-
-
-- MCU
-  - [x] ESP32-S3
-  
-- Camera
-  - [ ] [OV2640 camera](https://www.arducam.com/ov2640/)
-  - [ ] TBD
-  
-- Screen
-  - [ ] TBD
-  
-    
-
-### Software Progress:
 - [ ] **Custom Bootloader**
 
 - [ ] Multi qr-code input
@@ -52,29 +62,20 @@ The current development is based on the [**ESP32-S3 MCU**](https://www.espressif
   - [ ] Bitcoin (SegWit)
     - [ ] AirGap Wallet
     - [ ] BlueWallet
-    
-    
-
 
 ## How to Build
-The project is developed using the PlatformIO IDE based on the Arduino framework. Compiling the software is incredibly simple:
 
-1. Install the [PlatformIO IDE](https://platformio.org/platformio-ide).
-2. Open the project in PlatformIO IDE.
-3. Click the 'PlatformIO: Build' button to compile the project.
+The project is developed using the VSCode IDE based on the ESP-IDF framework. Compiling the software is incredibly simple:
 
+1. Install the [ESP-IDF (Espressif IoT Development Framework)](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/get-started/index.html#ide).
+2. Open the project in VSCode IDE.
+3. Click the 'ESP-IDF: Build' button to compile the project.
 
-
-## Special Thanks
+## Thanks
 
 A huge thanks to the following open-source projects, which have been instrumental in the development of this project:
 
-- [uBitcoin](https://github.com/micro-bitcoin/uBitcoin.git)
-- [tinycbor](https://github.com/intel/tinycbor)
-- [airgap-vault](https://github.com/airgap-it/airgap-vault)
-  (*While not directly using the library, it provided a lot of inspiration for our work.*)
-- [KeystoneHQ](https://github.com/KeystoneHQ)
-  (*Thanks for offering invaluable references for QR-based implementations.*)
+[uBitcoin](https://github.com/micro-bitcoin/uBitcoin.git) [LVGL](https://github.com/lvgl/lvgl) [tinycbor](https://github.com/intel/tinycbor) [airgap-vault](https://github.com/airgap-it/airgap-vault) [KeystoneHQ](https://github.com/KeystoneHQ) [esp32-camera](https://github.com/espressif/esp32-camera) [esp-code-scanner](https://github.com/espressif/)
 
 ---
 
