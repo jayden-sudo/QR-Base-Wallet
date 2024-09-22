@@ -30,7 +30,7 @@ static Wallet *wallet = nullptr;
 static bool once_after_unlock = false;
 static bool on_process = false;
 
-static bool qr_scanner_task_start = true;
+static bool qr_scanner_task_start = false;
 
 static void qrScannerTask(void *parameters)
 {
@@ -95,6 +95,60 @@ static void qrScannerTask(void *parameters)
     }
 }
 
+static std::unique_ptr<ur::UR> startURScanner()
+{
+    LOGI("UR scanner task started");
+    QR_CODE_BUFFER[0] = '\0';
+    qr_scanner_task_start = true;
+    std::unique_ptr<ur::UR> decoded_ur = nullptr;
+    std::unique_ptr<ur::URDecoder> decoder = nullptr;
+    while (1)
+    {
+        if (QR_CODE_BUFFER[0] != '\0')
+        {
+            // copy of QR_CODE_BUFFER
+            std::string _qrcode = QR_CODE_BUFFER;
+            LOGI("QR code: %s", QR_CODE_BUFFER);
+            QR_CODE_BUFFER[0] = '\0';
+            URType urtype_internal = ur_type(_qrcode);
+            if (urtype_internal == URType::SinglePart)
+            {
+                decoded_ur = std::make_unique<ur::UR>(ur::URDecoder::decode(_qrcode));
+                if (decoded_ur->is_valid())
+                {
+                    goto URScannerEnd;
+                }
+            }
+            else if (urtype_internal == URType::MultiPart)
+            {
+                if (decoder == nullptr)
+                {
+                    decoder = std::make_unique<ur::URDecoder>();
+                }
+
+                if (decoder->receive_part(_qrcode))
+                {
+                    if (decoder->is_complete())
+                    {
+                        if (decoder->is_success())
+                        {
+                            decoded_ur = std::make_unique<ur::UR>(decoder->result_ur());
+                        }
+                        goto URScannerEnd;
+                    }
+                }
+            }
+        }
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+
+URScannerEnd:
+
+    qr_scanner_task_start = false;
+    LOGI("QR scanner task stopped");
+    return decoded_ur;
+}
+
 void app_main(void)
 {
     printf("QR-Base Wallet\n");
@@ -128,16 +182,6 @@ void app_main(void)
     fflush(stdout);
 
     xTaskCreatePinnedToCore(qrScannerTask, "qrScannerTask", 4 * 1024, NULL, 10, NULL, MCU_CORE1);
-
-    while (1)
-    {
-        if (QR_CODE_BUFFER[0] != '\0')
-        {
-            LOGI("QR code: %s", QR_CODE_BUFFER);
-            QR_CODE_BUFFER[0] = '\0';
-        }
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-    }
 
     WalletData walletData;
 
@@ -201,76 +245,88 @@ static void loop()
         {
             on_process = true;
             {
-                // std::string qrcode_input = "UR:ETH-SIGN-REQUEST/OLADTPDAGDHEWFEMLOBSMNGSFXLYASWKPDDRMEGTQDAOHDIMAOYAIOLSPKENOSLALRHKISDLAELRRPAHCTBSLFLYESMWNEVOESHLIOINKSENQZNEGMFTGYFPOSYAZMTIATIMLAROFNBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAEBYCPEOFYGOIYKTLONLAERTAXAAAACYAEPKENOSAHTAADDYOEADLECSDWYKCSFNYKAEYKAEWKAEWKAOCYWLDAQZPRAMGHNEVOESHLIOINKSENQZNEGMFTGYFPOSYAZMTIATIMCNMYJTRE";
-                std::string qrcode_input = "UR:ETH-SIGN-REQUEST/OLADTPDAGDBKAABWRDVOHHGEBBNEWKCAWLRPLERSKTAOHDECAOWFLSPKENOSLALRHKISDLAELPBNRODYEMDYLFGMAYMWMYIATSUTIMFHHKETHSJTWTHNCMRKWZHPTBAOEOBZLOADIAFEKSHLLEAEAELARTAXAAAACYAEPKENOSAHTAADDYOEADLECSDWYKCSFNYKAEYKAEWKAEWKAOCYWLDAQZPRAMGHNEVOESHLIOINKSENQZNEGMFTGYFPOSYAZMTIATIMFGVLDWFW";
+                LOGI("QR task start...");
+
                 {
-                    std::string _type;
-                    std::string _payload;
-                    if (decode_url(qrcode_input, &_type, &_payload) == 0)
+
+                    auto ur1 = startURScanner();
+                    if (ur1 != nullptr)
                     {
-                        if (_type == METAMASK_ETH_SIGN_REQUEST)
+                        if (ur1->type() == METAMASK_ETH_SIGN_REQUEST)
                         {
                             MetamaskEthSignRequest request;
-                            decode_metamask_eth_sign_request(_payload, &request);
-
-                            size_t sign_data_max_len = request.sign_data_base64url.length();
-                            uint8_t *sign_data = new uint8_t[sign_data_max_len];
-                            size_t sign_data_len = decode_base64url(request.sign_data_base64url, sign_data, sign_data_max_len);
-                            std::string sign_data_hex = toHex(sign_data, sign_data_len);
-                            LOGI("sign_data_hex:");
-                            LOGI("%s", sign_data_hex.c_str());
-                            LOGI("%ld", request.data_type);
-                            LOGI("%lld", request.chain_id);
-                            LOGI("%s", request.derivation_path.c_str());
-                            LOGI("%s", request.address.c_str());
-                            LOGI("Creating transaction factory...");
-                            TransactionFactory *transaction = TransactionFactory::fromSerializedData(sign_data, sign_data_len);
-                            do
+                            int err = decode_metamask_eth_sign_request(ur1.get(), &request);
+                            if (err == 0)
                             {
-                                if (transaction->error == 0)
-                                {
+                                size_t sign_data_max_len = request.sign_data_base64url.length();
+                                uint8_t *sign_data = new uint8_t[sign_data_max_len];
+                                size_t sign_data_len = decode_base64url(request.sign_data_base64url, sign_data, sign_data_max_len);
+                                std::string sign_data_hex = toHex(sign_data, sign_data_len);
+                                LOGI("sign_data_hex:");
+                                LOGI("%s", sign_data_hex.c_str());
+                                LOGI("%ld", request.data_type);
+                                LOGI("%lld", request.chain_id);
+                                LOGI("%s", request.derivation_path.c_str());
+                                LOGI("%s", request.address.c_str());
 
-                                    HDPrivateKey account = wallet->derive(request.derivation_path);
-                                    std::string account_address = Wallet::get_eth_address(account);
-                                    LOGI("account_address: %s", account_address.c_str());
-                                    LOGI("request.address: %s", request.address.c_str());
-                                    if (account_address != request.address)
+                                if (request.data_type == KEY_DATA_TYPE_SIGN_TRANSACTION)
+                                {
+                                    LOGI("Creating transaction factory...");
+                                    TransactionFactory *transaction = TransactionFactory::fromSerializedData(sign_data, sign_data_len);
+                                    do
                                     {
-                                        LOGE("Invalid address");
-                                    }
-                                    else
-                                    {
-                                        LOGI("Signing transaction...");
-                                        uint8_t signature[65];
-                                        Wallet::eth_sign_serialized_data(account, sign_data, sign_data_len, signature);
-                                        size_t uuid_max_len = request.uuid_base64url.length();
-                                        uint8_t *uuid = new uint8_t[uuid_max_len];
-                                        size_t uuid_len = decode_base64url(request.uuid_base64url, uuid, uuid_max_len);
-                                        std::string qr_code = generate_metamask_eth_signature(uuid, uuid_len, signature);
-                                        delete[] uuid;
-                                        LOGI("Signature QR code:");
-                                        // Make and print the QR Code symbol
-                                        printQRCode(qr_code.c_str());
-                                    }
+                                        if (transaction->error == 0)
+                                        {
+
+                                            HDPrivateKey account = wallet->derive(request.derivation_path);
+                                            std::string account_address = Wallet::get_eth_address(account);
+                                            LOGI("account_address: %s", account_address.c_str());
+                                            LOGI("request.address: %s", request.address.c_str());
+                                            if (account_address != request.address)
+                                            {
+                                                LOGE("Invalid address");
+                                            }
+                                            else
+                                            {
+                                                LOGI("Signing transaction...");
+                                                uint8_t signature[65];
+                                                Wallet::eth_sign_serialized_data(account, sign_data, sign_data_len, signature);
+                                                size_t uuid_max_len = request.uuid_base64url.length();
+                                                uint8_t *uuid = new uint8_t[uuid_max_len];
+                                                size_t uuid_len = decode_base64url(request.uuid_base64url, uuid, uuid_max_len);
+                                                std::string qr_code = generate_metamask_eth_signature(uuid, uuid_len, signature);
+                                                delete[] uuid;
+                                                LOGI("Signature QR code:");
+                                                // Make and print the QR Code symbol
+                                                printQRCode(qr_code.c_str());
+                                            }
+                                        }
+                                    } while (0);
+                                    delete[] sign_data;
+                                    delete transaction;
                                 }
-                            } while (0);
-                            delete[] sign_data;
-                            delete transaction;
+                                else if (request.data_type == KEY_DATA_TYPE_SIGN_TYPED_DATA)
+                                {
+                                    LOGI("Signing typed data...");
+                                }
+                                else
+                                {
+                                    LOGE("Invalid data type: %ld", request.data_type);
+                                }
+                            }
+                            else
+                            {
+                                LOGE("decode_metamask_eth_sign_request error: %d", err);
+                            }
                         }
                         else
                         {
-                            LOGE("Unsupported QR code type: ");
-                            LOGI("%s", _type.c_str());
+                            LOGE("Failed to decode metamask eth sign request");
                         }
                     }
-                    else
-                    {
-
-                        LOGE("Invalid QR code");
-                    }
                 }
-
-                vTaskDelay(1000 * 60 / portTICK_PERIOD_MS);
+                LOGI("QR task finished, sleep 2s");
+                vTaskDelay(1000 * 2 / portTICK_PERIOD_MS);
             }
             on_process = false;
         }

@@ -57,3 +57,5 @@ static void eraseWalletData(WalletData &walletData);
 static void qrScannerTask(void *parameters);
 
 static void printQRCode(const char *qrcode);
+
+static std::unique_ptr<ur::UR> startURScanner();

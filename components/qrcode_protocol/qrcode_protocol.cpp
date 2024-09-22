@@ -1,37 +1,26 @@
-#include <qrcode_protocol.hpp>
-#include <bc-ur.hpp>
-#include <cbor.h>
-#include <cborjson.h>
-#include <cJSON.h>
-#include <base64url.hpp>
+#include "qrcode_protocol.hpp"
+#include "cbor.h"
+#include "cborjson.h"
+#include "cJSON.h"
+#include "base64url.hpp"
 #include <algorithm>
 #include "esp_log.h"
 
 #define TAG "QRCODE_PROTOCOL"
 #define LOGI(...) ESP_LOGI(TAG, __VA_ARGS__)
-
-int decode_url(const std::string url, std::string *type, std::string *payload)
+#define LOGE(...) ESP_LOGE(TAG, __VA_ARGS__)
+URType ur_type(const std::string &url)
 {
-    // UR:ETH-SIGN-REQUEST/OLADTPDAGDBKAABWRDVOHHGEBBNEWKCAWLRPLERSKTAOHDECAOWFLSPKENOSLALRHKISDLAELPBNRODYEMDYLFGMAYMWMYIATSUTIMFHHKETHSJTWTHNCMRKWZHPTBAOEOBZLOADIAFEKSHLLEAEAELARTAXAAAACYAEPKENOSAHTAADDYOEADLECSDWYKCSFNYKAEYKAEWKAEWKAOCYWLDAQZPRAMGHNEVOESHLIOINKSENQZNEGMFTGYFPOSYAZMTIATIMFGVLDWFW
-    size_t index = url.find('/');
-    if (index == std::string::npos)
+    size_t _first_pos = url.find('/');
+    if (_first_pos != std::string::npos)
     {
-        return 1;
+        size_t _second_pos = url.find('/', _first_pos + 1);
+        if (_second_pos != std::string::npos)
+            return URType::MultiPart;
+        else
+            return URType::SinglePart;
     }
-    *type = url.substr(0, index);
-    std::transform(type->begin(), type->end(), type->begin(), ::tolower);
-    type->erase(0, 3); // Remove "ur:"
-
-    *payload = url.substr(index + 1);
-    std::transform(payload->begin(), payload->end(), payload->begin(), ::tolower);
-    return 0;
-}
-
-std::string encode_url(const std::string type, const std::string payload)
-{
-    std::string encoded = "ur:" + type + "/" + payload;
-    std::transform(encoded.begin(), encoded.end(), encoded.begin(), ::toupper);
-    return encoded;
+    return URType::Invalid;
 }
 
 std::string generate_metamask_crypto_hdkey(Wallet *wallet)
@@ -42,10 +31,11 @@ std::string generate_metamask_crypto_hdkey(Wallet *wallet)
                            (publicKeyFingerprint.fingerprint[2] << 8) |
                            (publicKeyFingerprint.fingerprint[3]);
 
-    uint8_t buf[200] = {0};
+    size_t buf_len = 200;
+    uint8_t *buf = new uint8_t[buf_len];
     CborError err;
     CborEncoder encoder, mapEncoder;
-    cbor_encoder_init(&encoder, buf, sizeof(buf), 0);
+    cbor_encoder_init(&encoder, buf, buf_len, 0);
     err = cbor_encoder_create_map(&encoder, &mapEncoder, 3 /* 3,4,6 */);
     if (err)
     {
@@ -88,15 +78,15 @@ std::string generate_metamask_crypto_hdkey(Wallet *wallet)
     cbor_encoder_close_container_checked(&mapEncoder, &originMapEncoder);
     cbor_encoder_close_container_checked(&encoder, &mapEncoder);
     size_t len = cbor_encoder_get_buffer_size(&encoder, buf);
-    std::string encoded_payload = encode_minimal(buf, len);
 
-    std::string encoded = encode_url(METAMASK_CRYPTO_HDKEY, encoded_payload);
-    // uint8_t *decoded_payload = nullptr;
-    // size_t decoded_payload_len = decode_minimal(encoded_payload, &decoded_payload);
+    std::vector<uint8_t, PSRAMAllocator<uint8_t>> vec(buf, buf + len);
+    delete[] buf;
+    ur::UR ur_crypto_hdkey(METAMASK_CRYPTO_HDKEY, vec);
+    std::string encoded = ur::UREncoder::encode(ur_crypto_hdkey);
     return encoded;
 }
 
-static std::string cast_cbor_to_json(uint8_t *output_payload, size_t output_payload_len)
+static std::string cast_cbor_to_json(const uint8_t *output_payload, size_t output_payload_len)
 {
     int json_flags = CborConvertDefaultFlags | CborConvertTagsToObjects | CborConvertStringifyMapKeys | CborConvertByteStringsToBase64Url;
     CborParser parser;
@@ -136,16 +126,20 @@ static std::string cast_cbor_to_json(uint8_t *output_payload, size_t output_payl
 #define TAG_UUID "tag37"
 #define TAG_CRYPTO_KEYPATH "tag304"
 
-int decode_metamask_eth_sign_request(std::string qrcode, MetamaskEthSignRequest *request)
+int decode_metamask_eth_sign_request(ur::UR *ur, MetamaskEthSignRequest *request)
 {
-    uint8_t *output_payload = nullptr;
-    size_t output_payload_len = decode_minimal(qrcode, &output_payload);
-    // cbor decode
-    std::string json_string = cast_cbor_to_json(output_payload, output_payload_len);
-    delete[] output_payload;
-    if (json_string.empty())
+    // eth-sign-request
+    if (ur->type() != METAMASK_ETH_SIGN_REQUEST)
     {
         return 1;
+    }
+    const uint8_t *payload_ptr = const_cast<uint8_t *>(ur->cbor().data());
+    size_t payload_len = ur->cbor().size();
+    // cbor decode
+    std::string json_string = cast_cbor_to_json(payload_ptr, payload_len);
+    if (json_string.empty())
+    {
+        return 2;
     }
     /*
         {
@@ -175,52 +169,66 @@ int decode_metamask_eth_sign_request(std::string qrcode, MetamaskEthSignRequest 
             "6": "n-I5XWdpeDa0n1I6UUGn-P_QB2o" // keys_address
         }
      */
-
-    cJSON *json = cJSON_Parse(json_string.c_str());
-    if (json == nullptr)
+    LOGI("json_string: %s", json_string.c_str());
+    // cJSON *json = cJSON_Parse(json_string.c_str());
+    std::unique_ptr<cJSON, decltype(&cJSON_Delete)> _json(cJSON_Parse(json_string.c_str()), cJSON_Delete);
+    if (_json == nullptr)
     {
-        return 1;
+        return 3;
     }
+    const cJSON *json = _json.get();
+
     const cJSON *keys_requestId_path_doc = cJSON_GetObjectItemCaseSensitive(json, KEY_REQUEST_ID);
     if (keys_requestId_path_doc == nullptr)
     {
-        return 1;
+        // cJSON_Delete(json);
+        return 4;
     }
     // tag37
     const cJSON *tag37_doc = cJSON_GetObjectItemCaseSensitive(keys_requestId_path_doc, TAG_UUID);
     if (tag37_doc == nullptr)
     {
-        return 1;
+        return 5;
     }
     std::string uuid_base64url = tag37_doc->valuestring;
     const cJSON *sign_data_doc = cJSON_GetObjectItemCaseSensitive(json, KEY_SIGN_DATA);
     if (sign_data_doc == nullptr)
     {
-        return 1;
+        return 6;
     }
     std::string sign_data_base64 = sign_data_doc->valuestring;
 
     const cJSON *data_type_doc = cJSON_GetObjectItemCaseSensitive(json, KEY_DATA_TYPE);
     if (data_type_doc == nullptr)
     {
-        return 1;
+        return 7;
     }
-    uint32_t data_type = data_type_doc->valueint;
-    if (data_type != 4)
+    int data_type = data_type_doc->valueint;
+    if (data_type != KEY_DATA_TYPE_SIGN_TRANSACTION && data_type != KEY_DATA_TYPE_SIGN_TYPED_DATA)
     {
-        return 1;
+        LOGI("data_type is not supported: %d", data_type);
+        return 8;
     }
 
+    uint64_t chain_id = 0; // optional
     const cJSON *chain_id_doc = cJSON_GetObjectItemCaseSensitive(json, KEY_CHAIN_ID);
-    if (chain_id_doc == nullptr)
+    if (chain_id_doc != nullptr)
     {
-        return 1;
+        chain_id = chain_id_doc->valueint;
     }
-    uint64_t chain_id = chain_id_doc->valueint;
+    if (data_type == KEY_DATA_TYPE_SIGN_TRANSACTION)
+    {
+        if (chain_id == 0)
+        {
+            LOGE("chain_id is required for sign transaction");
+            return 9;
+        }
+    }
+
     const cJSON *address_base64_doc = cJSON_GetObjectItemCaseSensitive(json, KEY_ADDRESS);
     if (address_base64_doc == nullptr)
     {
-        return 1;
+        return 10;
     }
     std::string address_base64 = address_base64_doc->valuestring;
     size_t hex_address_max_len = 20;
@@ -231,19 +239,19 @@ int decode_metamask_eth_sign_request(std::string qrcode, MetamaskEthSignRequest 
     const cJSON *derivation_path_doc = cJSON_GetObjectItemCaseSensitive(json, KEY_DERIVATION_PATH);
     if (derivation_path_doc == nullptr)
     {
-        return 1;
+        return 11;
     }
     // tag304
     const cJSON *tag304_doc = cJSON_GetObjectItemCaseSensitive(derivation_path_doc, TAG_CRYPTO_KEYPATH);
     if (tag304_doc == nullptr)
     {
-        return 1;
+        return 12;
     }
     std::string crypto_keypath = "m/";
     const cJSON *components_path_array_doc = cJSON_GetObjectItemCaseSensitive(tag304_doc, "1");
     if (components_path_array_doc == nullptr)
     {
-        return 1;
+        return 13;
     }
     const cJSON *components_path_doc = NULL;
     size_t _index = 0;
@@ -274,74 +282,6 @@ int decode_metamask_eth_sign_request(std::string qrcode, MetamaskEthSignRequest 
     request->chain_id = chain_id;
     request->derivation_path = crypto_keypath;
     request->address = address;
-
-    cJSON_Delete(json);
-
-    // #TODO JSON
-    // JsonDocument doc;
-    // deserializeJson(doc, json_string);
-
-    // JsonDocument keys_requestId_path_doc = doc[String(KEY_REQUEST_ID)];
-    // if (keys_requestId_path_doc.isNull())
-    // {
-    //     return 1;
-    // }
-    // // tag37
-    // std::string uuid_base64url = keys_requestId_path_doc[String(TAG_UUID)];
-
-    // std::string sign_data_base64 = doc[String(KEY_SIGN_DATA)];
-
-    // uint32_t data_type = doc[String(KEY_DATA_TYPE)];
-    // if (data_type != 4)
-    // {
-    //     return 1;
-    // }
-
-    // uint64_t chain_id = doc[String(KEY_CHAIN_ID)];
-
-    // std::string address_base64 = doc[String(KEY_ADDRESS)];
-    // size_t hex_address_max_len = 20;
-    // uint8_t hex_address[hex_address_max_len];
-    // size_t hex_address_len = decode_base64url(address_base64, hex_address, hex_address_max_len);
-    // std::string address = "0x" + toHex(hex_address, hex_address_len);
-
-    // JsonDocument derivation_path_doc = doc[String(KEY_DERIVATION_PATH)];
-    // if (derivation_path_doc.isNull())
-    // {
-    //     return 1;
-    // }
-    // // tag304
-    // JsonDocument tag304_doc = derivation_path_doc[String(TAG_CRYPTO_KEYPATH)];
-    // if (tag304_doc.isNull())
-    // {
-    //     return 1;
-    // }
-
-    // std::string crypto_keypath = "m/";
-    // JsonArray path_array = tag304_doc[String("1")].as<JsonArray>();
-    // if (path_array.size() % 2 != 0)
-    // {
-    //     return 1;
-    // }
-    // for (int i = 0; i < path_array.size(); i += 2)
-    // {
-    //     uint8_t _path = path_array[i];
-    //     bool _hardend = path_array[i + 1];
-    //     crypto_keypath += String(_path);
-    //     if (_hardend)
-    //     {
-    //         crypto_keypath += "'";
-    //     }
-    //     crypto_keypath += "/";
-    // }
-
-    // request->uuid_base64url = uuid_base64url;
-    // request->sign_data_base64url = sign_data_base64;
-    // request->data_type = data_type;
-    // request->chain_id = chain_id;
-    // request->derivation_path = crypto_keypath;
-    // request->address = address;
-
     return 0;
 }
 
@@ -376,10 +316,12 @@ std::string generate_metamask_eth_signature(uint8_t *uuid, size_t uuid_len, uint
 
     cbor_encoder_close_container_checked(&encoder, &mapEncoder);
     size_t len = cbor_encoder_get_buffer_size(&encoder, buf);
-    std::string encoded_payload = encode_minimal(buf, len);
-    std::string encoded = encode_url(METAMASK_ETH_SIGNATURE, encoded_payload);
 
+    const char type[] = METAMASK_ETH_SIGNATURE;
+    ur::ByteVector vec(buf, buf + len);
+    ur::UR ur_signature(type, vec);
+    std::string encoded = ur::UREncoder::encode(ur_signature);
+    LOGI("encoded_ur: %s", encoded.c_str());
     delete[] buf;
-
     return encoded;
 }
