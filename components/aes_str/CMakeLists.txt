@@ -1,4 +1,4 @@
-set(src "./aes.c")
+set(src "./aes_str.c")
 set(include "./")
 
 idf_component_register(SRCS ${src}

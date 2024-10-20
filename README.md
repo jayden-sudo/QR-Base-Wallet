@@ -37,7 +37,7 @@ The current development is based on the [**ESP32-S3 MCU**](https://www.espressif
 
   | Screen | Support | Test |
   | ------ | ------- | ---- |
-  | TBD    |         |      |
+  | Capacitive touchscreen with ILI9341 driver    |         |      |
 
   
 
@@ -53,6 +53,11 @@ The current development is based on the [**ESP32-S3 MCU**](https://www.espressif
     - [ ] Access List Transactions (EIP-2930)
     - [x] Fee Market Transactions (EIP-1559)
     - [ ] Blob Transactions (EIP-4844)
+    - [x] Sign Personal Message
+    - [ ] Sign Typed Data
+    - [ ] Sign Typed Data V3
+    - [ ] Sign Typed Data V4
+    - [ ] Sign Permit
   - [ ] AirGap Wallet
     - [ ] TBD
 
@@ -73,7 +78,7 @@ The project is developed using the VSCode IDE based on the ESP-IDF framework. Co
 
 A huge thanks to the following open-source projects, which have been instrumental in the development of this project:
 
-[uBitcoin](https://github.com/micro-bitcoin/uBitcoin.git) [LVGL](https://github.com/lvgl/lvgl) [tinycbor](https://github.com/intel/tinycbor) [airgap-vault](https://github.com/airgap-it/airgap-vault) [KeystoneHQ](https://github.com/KeystoneHQ) [esp32-camera](https://github.com/espressif/esp32-camera) [esp-code-scanner](https://github.com/espressif/) [bc-ur](https://github.com/Blockstream/esp32_bc-ur)
+[uBitcoin](https://github.com/micro-bitcoin/uBitcoin.git) [tinycbor](https://github.com/intel/tinycbor) [airgap-vault](https://github.com/airgap-it/airgap-vault) [KeystoneHQ](https://github.com/KeystoneHQ) [esp32-camera](https://github.com/espressif/esp32-camera) [esp-code-scanner](https://github.com/espressif/) [bc-ur](https://github.com/Blockstream/esp32_bc-ur)
 
 ---
 

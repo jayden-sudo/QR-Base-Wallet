@@ -1,4 +1,4 @@
-#include "rlp.hpp"
+#include "rlp.h"
 
 /*
     Encode example:
@@ -248,12 +248,13 @@ static int rlp_encode_array_content(uint8_t *buf, size_t buf_len, struct RLP_ITE
 int rlp_encode_array(uint8_t *buf, size_t buf_len, struct RLP_ITEM **item_array, size_t item_array_size)
 {
     uint8_t *_buf = buf;
-    uint8_t *__buf = new uint8_t[buf_len];
+    uint8_t *__buf = malloc(buf_len);
     size_t total_len = 0;
     size_t __content_len = rlp_encode_array_content(__buf, buf_len, item_array, item_array_size);
     if (__content_len == 0)
     {
-        delete[] __buf;
+        free(__buf);
+        __buf = NULL;
         return 0;
     }
 
@@ -285,6 +286,6 @@ int rlp_encode_array(uint8_t *buf, size_t buf_len, struct RLP_ITEM **item_array,
         memcpy(_buf, __buf, __content_len);
         _buf += __content_len;
     }
-    delete[] __buf;
+    free(__buf);
     return total_len;
 }
